@@ -1,10 +1,11 @@
 #!/usr/bin/python
 
-from urllib2 import urlopen
+from urllib2 import urlopen, URLError
 from urllib import urlencode
 from getopt import gnu_getopt as getopt, GetoptError
 import sys
 import logging
+import xml.etree.ElementTree as ET
 
 
 ENDPOINT_URL = 'http://sdkhttp.eucp.b2m.cn/sdkproxy/'
@@ -23,11 +24,24 @@ class EmaySMS(object):
     def api(self, action, data):
         data['cdkey']       = self.cdkey
         data['password']    = self.password
-        f = urlopen(ENDPOINT_URL + action + '.action', urlencode(data))
-        response = f.read()
-        if '<error>0</error>' not in response:
-            raise EmaySMSException(response)
-        return response
+
+        try:
+            f   = urlopen(ENDPOINT_URL + action + '.action', urlencode(data))
+            xml = f.read().strip()
+        except URLError as e:
+            raise EmaySMSException(e)
+
+        try:
+            e   = ET.fromstring(xml) 
+            err = int(e.find('error').text)
+            msg = e.find('message').text
+        except ET.ParseError as e:
+            raise EmaySMSException(e)
+
+        if 1 == err:
+            raise EmaySMSException(msg)
+        else:
+            return msg
 
 
     def register(self):
@@ -97,9 +111,9 @@ class EmaySMS(object):
 
     @property
     def balance(self):
-        ' Query account blance '
-        xml = self.api('querybalance', {})
-        return xml
+        ' Query account blance in RMB '
+        msg = self.api('querybalance', {})
+        return float(msg)
 
 
     def recharge(self, card_number, card_password):
@@ -122,7 +136,7 @@ Example
 -------
 
 
-Register a key file:
+Register a key file. A key file must be registered before it can be used:
 
     emaysms.py register -k [KEY FILE]
 
@@ -132,12 +146,12 @@ De-register a key file:
     emaysms.py deregister -k [KEY FILE] 
 
 
-Send an SMS:
+Send an SMS. If `-t` option is omitted, the message is sent immediately. Otherwise, the message is sent at the given time by `-t`. 
 
     emaysms.py send -k [KEY FILE] [-t YYYYMMDDHHMMSS] PHONE1 [PHONE2 ...]
 
 
-Query balance:
+Query account balance:
 
     emaysms.py balance -k [KEY FILE]
 
@@ -147,7 +161,7 @@ Recharge an account:
     emaysms.py recharge -k [KEY FILE] [PREPAID CARD NUMBER] [PREPAID CARD PASSWORD]
 
 
-Change password for a key file:
+Change password for a key file. Remember to change the old password in the key file:
 
     emaysms.py changepassword -k [KEY FILE]  [NEW PASSWORD]
 
@@ -222,6 +236,12 @@ def main():
 
         new_password = args[0]
         emay.change_password(new_password)
+
+    elif action == 'register':
+        emay.register()
+
+    elif action == 'deregister':
+        emay.deregister()
 
     else:
         sys.exit('Unknonw action {0}'.format(action))
