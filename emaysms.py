@@ -78,11 +78,13 @@ class EmaySMS(object):
     def send(self, phone_numbers, message, time=None, serial=None):
         ' Send an instant SMS to a list of phone numbers '
 
+        # max 500 Chinese chars or 1000 ASCII chars
+        if len(message) > 1000:
+            raise EmaySMSException('Message too long. ')
+
         numbers = ','.join(phone_numbers)
         logging.debug('{0} | "{1}"'.format(numbers, message))
-        # max 500 Chinese chars or 1000 ASCII chars
-        msg     = message.encode('UTF-8')  
-        data    = {'phone': numbers, 'message': msg}
+        data    = {'phone': numbers, 'message': message}
 
         if time is None:
             action = 'sendsms'
@@ -127,8 +129,9 @@ class EmaySMS(object):
 
 
 
+if __name__ == "__main__" : 
 
-USAGE = '''
+    USAGE = '''
 Usage: emaysms.py -k [KEY FILE] [ACTION] [ARGS]
 
 
@@ -146,9 +149,9 @@ De-register a key file:
     emaysms.py deregister -k [KEY FILE] 
 
 
-Send an SMS. If `-t` option is omitted, the message is sent immediately. Otherwise, the message is sent at the given time by `-t`. 
+Send an SMS. If `-t` option is omitted, the message is sent immediately. Otherwise, the message is sent at the given time by `-t`. SMS content is read from stdin, with up to 500 Chinese characters or 1,000 ASCII characters. 
 
-    emaysms.py send -k [KEY FILE] [-t YYYYMMDDHHMMSS] PHONE1 [PHONE2 ...]
+    echo "Hello World!" | emaysms.py send -k [KEY FILE] [-t YYYYMMDDHHMMSS] PHONE1 [PHONE2 ...]
 
 
 Query account balance:
@@ -175,78 +178,103 @@ Key file format
 '''
 
 
-def parse_key_file(filename):
-    for line in open(filename).readlines():
-        line = line.strip()
-        if line.startswith('cdkey'):
-            k, v = line.split('=', 1)
-            cdkey = v.strip()
-        elif line.startswith('password'):
-            k, v = line.split('=', 1)
-            password = v.strip()
+    def parse_key_file(filename):
+        try:
+            for line in open(filename).readlines():
+                line = line.strip()
+                if line.startswith('cdkey'):
+                    k, v = line.split('=', 1)
+                    cdkey = v.strip()
+                elif line.startswith('password'):
+                    k, v = line.split('=', 1)
+                    password = v.strip()
+            return cdkey, password
+        except IOError as e:
+            if e.errno == 2:
+                sys.exit('Key file "{0}" not found. '.format(filename))
 
-    return cdkey, password
+
+
+    class Actions():
+        ' Command containter '
+
+        @staticmethod
+        def send(emay, opts, args):
+            if len(args) < 1:
+                sys.exit(USAGE)
+
+            numbers = args
+            message = sys.stdin.read()
+            emay.send(numbers, message)
+
+        
+        @staticmethod
+        def sent(emay, opts, args):
+            print emay.sent
+
+
+        @staticmethod
+        def balance(emay, opts, args):
+            print emay.balance
+
+        
+        @staticmethod
+        def recharge(emay, opts, args):
+            card_number     = args[0]
+            card_password   = args[1]
+            emay.recharge(card_number, card_password)
+
+
+        @staticmethod
+        def changepassword(emay, opts, args):
+            new_password = args[0]
+            emay.change_password(new_password)
+
+
+        @staticmethod
+        def register(emay, opts, args):
+            emay.register()
+
+
+        @staticmethod
+        def deregister(emay, opts, args):
+            emay.deregister()
 
 
 
-def main():
 
-    try:
-        opts, args = getopt(sys.argv[1:], 'k:h', ['help'])
-        opts = dict(opts)
-    except GetoptError as e:
-        sys.exit(str(e) + '\n' + USAGE)
+    def main():
 
-    if '-h' in opts or '--help' in opts:
-        sys.exit(USAGE)
+        try:
+            opts, args = getopt(sys.argv[1:], 'k:h', ['help'])
+            opts = dict(opts)
+        except GetoptError as e:
+            sys.exit(str(e) + '\n' + USAGE)
 
-    if '-k' in opts:
-        cdkey, password = parse_key_file(opts['-k'])
-        emay = EmaySMS(cdkey, password)
-    else:
-        sys.exit('Require key file "-k". ')
-
-    if len(args) < 1:
-        sys.exit(USAGE)
-
-    action  = args[0].lower()
-    args    = args[1:]
-
-    if action == 'send':
-        if len(args) < 1:
+        if '-h' in opts or '--help' in opts:
             sys.exit(USAGE)
 
-        numbers = args
-        message = sys.stdin.read()
-        emay.send(numbers, message)
+        if len(args) > 0:
+            action  = args[0].lower()
+            args    = args[1:]
+        else:
+            sys.exit('Action required. ')
 
-    elif action == 'sent':
-        print emay.sent
 
-    elif action == 'balance': 
-        print emay.balance
+        if not hasattr(Actions, action):
+            sys.exit('Unknonw action {0}'.format(action))
 
-    elif action == 'recharge':
+        if '-k' in opts:
+            cdkey, password = parse_key_file(opts['-k'])
+            emay = EmaySMS(cdkey, password)
+        else:
+            sys.exit('Key file "-k" required. ')
 
-        card_number     = args[0]
-        card_password   = args[1]
-        emay.recharge(card_number, card_password)
-
-    elif action == 'changepassword':
-
-        new_password = args[0]
-        emay.change_password(new_password)
-
-    elif action == 'register':
-        emay.register()
-
-    elif action == 'deregister':
-        emay.deregister()
-
-    else:
-        sys.exit('Unknonw action {0}'.format(action))
+        try:
+            getattr(Actions, action)(emay, opts, args)
+        except EmaySMSException as e:
+            sys.exit(e)
 
 
 
-if __name__ == "__main__" : 
     main()
