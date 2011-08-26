@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 
 
 ENDPOINT_URL = 'http://sdkhttp.eucp.b2m.cn/sdkproxy/'
+SDK_VERSION = '4.1.0'
 
 
 class EmaySMSException(Exception):
@@ -38,9 +39,9 @@ class EmaySMS(object):
         except ET.ParseError as e:
             raise EmaySMSException(e)
 
-        if 1 == err:
+        if 1 == err:    # Something went wrong
             raise EmaySMSException(msg)
-        else:
+        else:           # Looks good
             return msg
 
 
@@ -78,7 +79,7 @@ class EmaySMS(object):
     def send(self, phone_numbers, message, time=None, serial=None):
         ' Send an instant SMS to a list of phone numbers '
 
-        # max 500 Chinese chars or 1000 ASCII chars
+        # TODO: max 500 Chinese chars or 1000 ASCII chars
         if len(message) > 1000:
             raise EmaySMSException('Message too long. ')
 
@@ -103,7 +104,7 @@ class EmaySMS(object):
                 raise EmaySMSException('Serial too long. Max 10 digits. ')
             data['addserial'] = serial
 
-        return self.api(action, data)
+        self.api(action, data)
 
 
     @property
@@ -173,7 +174,7 @@ Change password for a key file. Remember to change the old password in the key f
 Key file format
 ---------------
 
-    cdkey=AAAA-BBBB-CCCC-DDDD
+    cdkey=AAAA-BBB-CCCC-DDDD
     password=123456
 '''
 
