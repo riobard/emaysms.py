@@ -1,7 +1,7 @@
 EmaySMS.py
 ==========
 
-Python client for Emay.cn SMS service using HTTP SDK. Visit [Emay downloading center][http://www.emay.cn/down.htm] for more information about the SDK. 
+Python client for Emay.cn SMS service using HTTP SDK. Visit [Emay downloading center](http://www.emay.cn/down.htm) for more information about the SDK. 
 
 Current SDK version: 4.1.0
 
