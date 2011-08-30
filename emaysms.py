@@ -79,13 +79,19 @@ class EmaySMS(object):
     def send(self, phone_numbers, message, time=None, serial=None):
         ' Send an instant SMS to a list of phone numbers '
 
-        # TODO: max 500 Chinese chars or 1000 ASCII chars
-        if len(message) > 1000:
+        if not isinstance(message, unicode):
+            raise EmaySMSException('Message must be a Unicode string. ')
+
+        # Max 500 chars (same for UTF-8 and ASCII) per message. It will be 
+        # split into 70 chars chunks before sending to mobile phones. The 4.1.0
+        # HTTP SDK is wrong about the 1,000 chars limit for ASCII chars. 
+        if len(message) > 500:
             raise EmaySMSException('Message too long. ')
 
         numbers = ','.join(phone_numbers)
-        logging.debug('{0} | "{1}"'.format(numbers, message))
-        data    = {'phone': numbers, 'message': message}
+        msg     = message.encode('utf-8')
+        logging.debug('{0} | "{1}"'.format(numbers, msg))
+        data    = {'phone': numbers, 'message': msg}
 
         if time is None:
             action = 'sendsms'
@@ -203,10 +209,16 @@ Key file format
         def send(emay, opts, args):
             if len(args) < 1:
                 sys.exit(USAGE)
-
             numbers = args
-            message = sys.stdin.read()
-            emay.send(numbers, message)
+
+            try:
+                encoding = opts.get('-c', 'utf8')
+                message = sys.stdin.read()
+                msg = message.decode(encoding)
+            except UnicodeDecodeError:
+                sys.exit('Failed to decode message using encoding "{0}". '.format(encoding))
+
+            emay.send(numbers, msg)
 
         
         @staticmethod
@@ -247,7 +259,7 @@ Key file format
     def main():
 
         try:
-            opts, args = getopt(sys.argv[1:], 'k:h', ['help'])
+            opts, args = getopt(sys.argv[1:], 'k:hc:', ['help'])
             opts = dict(opts)
         except GetoptError as e:
             sys.exit(str(e) + '\n' + USAGE)
